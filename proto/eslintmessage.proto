@@ -5,6 +5,7 @@ package proto;
 
 message EsLintRequest {
     string fileContent = 1;
+    string fileName = 2;  
 }
 
 message EsLintResponse {

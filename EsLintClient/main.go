@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/apsdehal/go-logger"
+	"github.com/fatih/color"
 	"github.com/fsnotify/fsnotify"
 	pb "github.com/ksfnu/eslint_server/EsLintClient/agent"
 	"google.golang.org/grpc"
@@ -16,6 +18,7 @@ import (
 
 var workspacePath = "C:/Users/ksfnu/eclipseWorkspace/workspace38_Photon/Frontend/src/main/webapp/app"
 
+// Config object for various configuration information
 type Config struct {
 	WorkspacePath   string // location of workspace directory
 	EslintServerURL string // Address of the NodeJS server component
@@ -34,7 +37,7 @@ func main() {
 	log = goLogger
 
 	if err != nil {
-		panic(err) // Check for error
+		panic(err)
 	}
 
 	// Set up a connection to the server.
@@ -55,25 +58,27 @@ func sendFileToServer(fileName string, conn *grpc.ClientConn) {
 	// fmt.Printf("Sending data to server: %s\n", string(data))
 
 	client := pb.NewEsLintServiceClient(conn)
-	req := &pb.EsLintRequest{FileContent: string(data)}
+	req := &pb.EsLintRequest{FileContent: string(data), FileName: fileName}
 
 	resp, err := client.LintFile(context.Background(), req)
 	if err != nil {
-		log.Fatalf("Error when calling LintFile: %s", err)
+		color.Magenta("Error when calling LintFile: %s", err)
 	}
 	// log.Println("Response from server:")
 	// Print ESLint warnings on console
-	// log.Println("---------------------------------")
 	if len(resp.Errors) > 0 {
-		log.Critical(resp.Errors)
+		color.Set(color.FgHiRed)
+		fmt.Print(fileName)
+		color.Unset()
+		color.HiRed(resp.Errors)
 		return
 	}
-	log.Notice("*** Clean ***")
+	color.HiGreen("*** Clean ***")
 }
 
 func check(e error) {
 	if e != nil {
-		log.ErrorF("Error occurred: %v\n", e)
+		color.Magenta("Error occurred: %v\n", e)
 	}
 }
 
@@ -86,7 +91,7 @@ func monitorFileSystemForChanges(conn *grpc.ClientConn) {
 
 	// recursively traverse the filesystem starting workspacePath root and add all subdirectories to watch
 	if err := filepath.Walk(config.WorkspacePath, watchDir); err != nil {
-		log.FatalF("Error occurred adding directories to recursive watch: %v", err)
+		color.Magenta("Error occurred adding directories to recursive watch: %v", err)
 	}
 
 	done := make(chan bool)
@@ -105,15 +110,15 @@ func monitorFileSystemForChanges(conn *grpc.ClientConn) {
 				if !ok {
 					return
 				}
-				log.ErrorF("error: %v", err)
+				color.Magenta("error: %v", err)
 			}
 		}
 	}()
 
 	err := watcher.Add(config.WorkspacePath)
-	log.InfoF("\n------- Monitoring directory [%s] for changes -------\n\n", config.WorkspacePath)
+	color.HiCyan("\n------- Monitoring directory [%s] for changes -------\n\n", config.WorkspacePath)
 	if err != nil {
-		log.FatalF("Error occurred: %v", err)
+		color.Magenta("Error occurred: %v", err)
 	}
 	<-done
 }

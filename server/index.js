@@ -5,7 +5,7 @@ const grpc = require("grpc");
 var protoLoader = require("@grpc/proto-loader");
 
 const PROTO_PATH = "../proto/eslintmessage.proto";
-const PORT = "127.0.0.1:4040";
+const PORT = "0.0.0.0:4040";
 
 var packageDefinition = protoLoader.loadSync(PROTO_PATH, {
   keepCase: true,
@@ -35,12 +35,15 @@ function main() {
 function LintFile(call, callback) {
   //console.log("Got text from client: \n", call.request);
   let data = call.request.fileContent;
+  let fileName = call.request.fileName;
+  console.log("Received request from client for file ", fileName);
+
   const scanReport = lintFileAsText(data);
 
-  console.log(
-    "Sending scanned report to client: \n",
-    util.inspect(scanReport, { showHidden: false, depth: null })
-  );
+  // console.log(
+  //   "Sending scanned report to client: \n",
+  //   util.inspect(scanReport, { showHidden: false, depth: null })
+  // );
   callback(null, {
     errors: scanReport
   });
