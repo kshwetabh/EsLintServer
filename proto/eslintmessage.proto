@@ -1,0 +1,16 @@
+syntax = "proto3";
+package proto;
+
+// import "eslintmessage.proto";
+
+message EsLintRequest {
+    string fileContent = 1;
+}
+
+message EsLintResponse {
+    string errors = 1;
+}
+
+service EsLintService {
+    rpc LintFile(EsLintRequest) returns (EsLintResponse);
+}

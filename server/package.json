@@ -1,0 +1,19 @@
+{
+  "name": "eslint-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@grpc/proto-loader": "^0.5.1",
+    "eslint": "^6.1.0",
+    "eslint-plugin-hms-plugins": "file:eslint",
+    "eslint-plugin-sonarjs": "^0.2.0",
+    "google-protobuf": "^3.0.0",
+    "grpc": "^1.11.0"
+  }
+}
