@@ -8,7 +8,7 @@ Here's how the Go Client with scan output looks:
 The basic idea is the developers working on JavaScript code should connect to the remote EsLint Server through the "EsLint Go Client" from their machines. The Go Client will monitor the developer's workstation (a specific directory) for any modifications and will send the modified files to the EsLint Server for scanning as soon as the files are modified. There is negligible network latency (especially if the server is running on intranet, etc.) This process is blazing fast since protobuffs are designed to be fast, lightweight and super fast way to communicate between client & server.
 
 ### Why is it better than running EsLint locally ?
-As always, the answer is, it repends. This system has some advantages over running the tool locally:
+As always, the answer is, it depends. This system has some advantages over running the tool locally:
 - Centralized control. Linter Rules can be controlled from one centralized location (on the server) and all developers in the team will be able to use it without local setup/change.
 - Minimal setup required for individual developers. They just need to have the client on their machine. No need to setup NodeJS, run NPM, etc.
 
