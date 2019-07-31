@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/apsdehal/go-logger"
 	"github.com/fatih/color"
@@ -15,8 +16,6 @@ import (
 	pb "github.com/ksfnu/eslint_server/EsLintClient/agent"
 	"google.golang.org/grpc"
 )
-
-var workspacePath = "C:/Users/ksfnu/eclipseWorkspace/workspace38_Photon/Frontend/src/main/webapp/app"
 
 // Config object for various configuration information
 type Config struct {
@@ -41,11 +40,16 @@ func main() {
 	}
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(config.EslintServerURL, grpc.WithInsecure())
+	//conn, err := grpc.Dial(config.EslintServerURL, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(10*time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, config.EslintServerURL, grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		color.HiRed("Error occurred while connecting to EsLint Server")
+		panic(err)
 	}
 	defer conn.Close()
+
 	var waitgroup sync.WaitGroup
 	waitgroup.Add(1)
 	monitorFileSystemForChanges(conn)
