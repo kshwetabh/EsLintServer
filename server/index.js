@@ -54,8 +54,8 @@ function LintFile(call, callback) {
  * @param {*} data File Buffer
  */
 function lintFileAsText(data) {
-  const report = cli.executeOnText(data.toString(), "tempfile.js"); //FILE_NAME
-  const formatter = cli.getFormatter("stylish");
+  const report = cli.executeOnText(data.toString(), "temp.js"); //FILE_NAME
+  const formatter = cli.getFormatter("json"); //stylish
   const formattedReport = formatter(report.results);
 
   // This is to print complete JSON objects with deep hierarchy

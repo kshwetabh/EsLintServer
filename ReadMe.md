@@ -34,3 +34,5 @@ If you need to modify the protobuff for any reason (like need to send more data 
    ```shell
    C:\Dev\GoProgramming\src\github.com\ksfnu\eslint_server>protoc -I proto/ proto/eslintmessage.proto --go_out=plugins=grpc:EsLintClient/agent proto/eslintmessage.proto
    ```
+
+**Copyright 2019 Kumar Shwetabh. All rights reserved.**
