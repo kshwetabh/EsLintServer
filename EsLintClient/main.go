@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"text/tabwriter"
 	"time"
 
 	"github.com/fatih/color"
@@ -51,7 +50,7 @@ type ESLintError struct {
 
 var severity = map[int]string{
 	1: "Warning",
-	2: "Error **",
+	2: "Error",
 }
 
 var config *Config
@@ -89,6 +88,8 @@ func sendFileToServer(fileName string, conn *grpc.ClientConn) {
 	check(err)
 	// fmt.Printf("Sending data to server: %s\n", string(data))
 
+	currrentTime := time.Now().Format("15:04:05")
+
 	client := pb.NewEsLintServiceClient(conn)
 	req := &pb.EsLintRequest{FileContent: string(data), FileName: fileName}
 
@@ -106,24 +107,24 @@ func sendFileToServer(fileName string, conn *grpc.ClientConn) {
 			color.Magenta("Error occurred while parsing server response: [%v]", err)
 			return
 		}
-
 		messages := lintErrors[0].Messages
+		
 		if len(messages) > 0 {
 			fmt.Println()
-			color.HiYellow(fileName)
+			color.HiCyan(fileName)
 
-			// create a new tabwriter
-			w := new(tabwriter.Writer)
-			w.Init(os.Stdout, 0, 0, 2, ' ', tabwriter.Debug)
-			fmt.Fprintln(w, "\n---\t--------\t----\t-------\t----\t")
-			fmt.Fprintln(w, "#\tLOCATION\tTYPE\tMESSAGE\tRULE\t")
-			fmt.Fprintln(w, "---\t--------\t----\t-------\t----\t")
-			for index, msg := range messages {
-				sev := severity[msg.Severity]
-				fmt.Fprintln(w, fmt.Sprintf("%d\t%d:%d\t%s\t%s\t%s\t", index, msg.Line, msg.Column, sev, msg.Message, msg.RuleID))
+			for _, msg := range messages {
+				paddedLintMsg := padErrorMessage(msg.Message)
+				paddedLineCol := padLineColumn(strconv.Itoa(msg.Line), strconv.Itoa(msg.Column))
+				paddedSev := padSevirity(severity[msg.Severity])
+
+				if msg.Severity == 2 {
+					fmt.Fprintf(color.Output, " %s\t%s\t%s\t%s\t\n", color.HiRedString(paddedLineCol), color.HiRedString(paddedSev), paddedLintMsg, msg.RuleID)
+				} else {
+					fmt.Fprintf(color.Output, " %s\t%s\t%s\t%s\t\n", color.YellowString(paddedLineCol), color.HiYellowString(paddedSev), paddedLintMsg, msg.RuleID)
+				}
 			}
-			w.Flush()
-			fmt.Fprintf(color.Output, "\n%s Errors, %s Warnings\n\n", color.HiRedString(strconv.Itoa(lintErrors[0].ErrorCount)), color.HiYellowString(strconv.Itoa(lintErrors[0].WarningCount)))
+			fmt.Fprintf(color.Output, "\n %s Errors, %s Warnings [%s]\n\n", color.HiRedString(strconv.Itoa(lintErrors[0].ErrorCount)), color.HiYellowString(strconv.Itoa(lintErrors[0].WarningCount)), color.HiMagentaString(currrentTime))
 		} else {
 			// Otherwise print clean msg
 			color.HiGreen("**** Clean ****")
@@ -132,6 +133,18 @@ func sendFileToServer(fileName string, conn *grpc.ClientConn) {
 		// Otherwise print clean msg
 		color.HiGreen("**** Clean ****")
 	}
+}
+
+func padErrorMessage(msg string) string {
+	//90 is the size of the maximum length error message we use in HMS
+	return fmt.Sprintf("%-90v", msg)
+}
+func padLineColumn(line, col string) string {
+	paddedLineCol := fmt.Sprintf("%s:%s", line, col)
+	return fmt.Sprintf("%-8s", paddedLineCol)
+}
+func padSevirity(msg string) string {
+	return fmt.Sprintf("%5v", msg)
 }
 
 func check(e error) {
