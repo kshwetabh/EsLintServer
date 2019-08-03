@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,9 +85,14 @@ func main() {
 }
 
 func sendFileToServer(fileName string, conn *grpc.ClientConn) {
+
+	// Send only js files for scanning
+	if !strings.HasSuffix(fileName, ".js") {
+		return
+	}
 	data, err := ioutil.ReadFile(fileName)
 	check(err)
-	// fmt.Printf("Sending data to server: %s\n", string(data))
+	fmt.Printf("Sending data to server: %s\n", string(data))
 
 	currrentTime := time.Now().Format("15:04:05")
 
@@ -108,7 +114,7 @@ func sendFileToServer(fileName string, conn *grpc.ClientConn) {
 			return
 		}
 		messages := lintErrors[0].Messages
-		
+
 		if len(messages) > 0 {
 			fmt.Println()
 			color.HiCyan(fileName)
