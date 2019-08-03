@@ -1,9 +1,5 @@
 package main
 
-import (
-	"github.com/jinzhu/gorm"
-)
-
 // Config object for various configuration information
 type Config struct {
 	WorkspacePath   string // location of workspace directory
@@ -12,7 +8,6 @@ type Config struct {
 
 // ESLintError struct
 type ESLintError struct {
-	gorm.Model
 	FilePath            string    `json:"filePath"`
 	Messages            []Message `json:"messages"`
 	ErrorCount          int       `json:"errorCount"`
@@ -23,7 +18,6 @@ type ESLintError struct {
 
 // Message struct
 type Message struct {
-	gorm.Model
 	RuleID    string `json:"ruleId"`
 	Severity  int    `json:"severity"`
 	Message   string `json:"message"`
