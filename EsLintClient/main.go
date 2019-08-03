@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -18,37 +20,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Config object for various configuration information
-type Config struct {
-	WorkspacePath   string // location of workspace directory
-	EslintServerURL string // Address of the NodeJS server component
-}
-
-// ESLintError struct
-type ESLintError struct {
-	FilePath string `json:"filePath"`
-	Messages []struct {
-		RuleID    string `json:"ruleId"`
-		Severity  int    `json:"severity"`
-		Message   string `json:"message"`
-		Line      int    `json:"line"`
-		Column    int    `json:"column"`
-		NodeType  string `json:"nodeType"`
-		EndLine   int    `json:"endLine,omitempty"`
-		EndColumn int    `json:"endColumn,omitempty"`
-		MessageID string `json:"messageId,omitempty"`
-		Fix       struct {
-			Range []int  `json:"range"`
-			Text  string `json:"text"`
-		} `json:"fix,omitempty"`
-	} `json:"messages"`
-	ErrorCount          int    `json:"errorCount"`
-	WarningCount        int    `json:"warningCount"`
-	FixableErrorCount   int    `json:"fixableErrorCount"`
-	FixableWarningCount int    `json:"fixableWarningCount"`
-	Source              string `json:"source"`
-}
-
 var severity = map[int]string{
 	1: "Warning",
 	2: "Error",
@@ -56,12 +27,17 @@ var severity = map[int]string{
 
 var config *Config
 var watcher *fsnotify.Watcher
+var reportFlag *bool
 
 func init() {
 	config = loadConfig()
 }
 
 func main() {
+
+	reportFlag = flag.Bool("report", false, "Scans all javascript files in the workspace and generates report.csv file.")
+	flag.Parse()
+
 	// Set up a connection to the server.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -78,10 +54,17 @@ func main() {
 
 	color.HiGreen("Successfully connected to the EsLint Server")
 
-	var waitgroup sync.WaitGroup
-	waitgroup.Add(1)
-	monitorFileSystemForChanges(conn)
-	waitgroup.Wait()
+	// if reportFlag argument passed on command line, then send all js files in workspace for scanning.
+	//TODO: Note that this is pretty network intensive and might crash client/server.
+	if *reportFlag {
+		fmt.Println("So you want to scan all the files in the workspace ?")
+		scanAllFilesInWorkspace(conn)
+	} else {
+		var waitgroup sync.WaitGroup
+		waitgroup.Add(1)
+		monitorFileSystemForChanges(conn)
+		waitgroup.Wait()
+	}
 }
 
 func sendFileToServer(fileName string, conn *grpc.ClientConn) {
@@ -91,8 +74,8 @@ func sendFileToServer(fileName string, conn *grpc.ClientConn) {
 		return
 	}
 	data, err := ioutil.ReadFile(fileName)
-	check(err)
-	fmt.Printf("Sending data to server: %s\n", string(data))
+	checkError("Could not read file to send to server", err)
+	// fmt.Printf("Sending data to server: %s\n", string(data))
 
 	currrentTime := time.Now().Format("15:04:05")
 
@@ -113,31 +96,54 @@ func sendFileToServer(fileName string, conn *grpc.ClientConn) {
 			color.Magenta("Error occurred while parsing server response: [%v]", err)
 			return
 		}
+
 		messages := lintErrors[0].Messages
 
+		fmt.Println()
+		color.HiCyan(fileName)
+
 		if len(messages) > 0 {
-			fmt.Println()
-			color.HiCyan(fileName)
-
 			for _, msg := range messages {
-				paddedLintMsg := padErrorMessage(msg.Message)
-				paddedLineCol := padLineColumn(strconv.Itoa(msg.Line), strconv.Itoa(msg.Column))
-				paddedSev := padSevirity(severity[msg.Severity])
-
-				if msg.Severity == 2 {
-					fmt.Fprintf(color.Output, " %s\t%s\t%s\t%s\t\n", color.HiRedString(paddedLineCol), color.HiRedString(paddedSev), paddedLintMsg, msg.RuleID)
+				if *reportFlag {
+					// save this into the database or CSV
+					saveToCSV(msg, fileName)
 				} else {
-					fmt.Fprintf(color.Output, " %s\t%s\t%s\t%s\t\n", color.YellowString(paddedLineCol), color.HiYellowString(paddedSev), paddedLintMsg, msg.RuleID)
+					printOnConsole(msg)
 				}
 			}
-			fmt.Fprintf(color.Output, "\n %s Errors, %s Warnings [%s]\n\n", color.HiRedString(strconv.Itoa(lintErrors[0].ErrorCount)), color.HiYellowString(strconv.Itoa(lintErrors[0].WarningCount)), color.HiMagentaString(currrentTime))
-		} else {
-			// Otherwise print clean msg
-			color.HiGreen("**** Clean ****")
 		}
+		fmt.Fprintf(color.Output, "\n %s Errors, %s Warnings [%s]\n\n", color.HiRedString(strconv.Itoa(lintErrors[0].ErrorCount)), color.HiYellowString(strconv.Itoa(lintErrors[0].WarningCount)), color.HiMagentaString(currrentTime))
 	} else if resp.Errors == "" {
 		// Otherwise print clean msg
 		color.HiGreen("**** Clean ****")
+	}
+}
+
+func saveToCSV(msg Message, fileName string) {
+	// file, err := os.Create("report.csv")
+	// If the file doesn't exist, create it, or append to the file
+	file, err := os.OpenFile("report.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	checkError("Cannot create file", err)
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	//filename, row, col, type, msg, ruleid
+	row := []string{fileName, strconv.Itoa(msg.Line), strconv.Itoa(msg.Column), strconv.Itoa(msg.Severity), msg.Message, msg.RuleID}
+	err = writer.Write(row)
+	checkError("Cannot write to file", err)
+}
+
+func printOnConsole(msg Message) {
+	paddedLintMsg := padErrorMessage(msg.Message)
+	paddedLineCol := padLineColumn(strconv.Itoa(msg.Line), strconv.Itoa(msg.Column))
+	paddedSev := padSevirity(severity[msg.Severity])
+
+	if msg.Severity == 2 {
+		fmt.Fprintf(color.Output, " %s\t%s\t%s\t%s\t\n", color.HiRedString(paddedLineCol), color.HiRedString(paddedSev), paddedLintMsg, msg.RuleID)
+	} else {
+		fmt.Fprintf(color.Output, " %s\t%s\t%s\t%s\t\n", color.YellowString(paddedLineCol), color.HiYellowString(paddedSev), paddedLintMsg, msg.RuleID)
 	}
 }
 
@@ -153,9 +159,9 @@ func padSevirity(msg string) string {
 	return fmt.Sprintf("%5v", msg)
 }
 
-func check(e error) {
-	if e != nil {
-		color.Magenta("Error occurred: %v\n", e)
+func checkError(message string, err error) {
+	if err != nil {
+		color.Magenta("%s: %v\n", message, err)
 	}
 }
 
@@ -209,6 +215,18 @@ func watchDir(path string, fi os.FileInfo, err error) error {
 		return watcher.Add(path)
 	}
 	return nil
+}
+
+func scanAllFilesInWorkspace(conn *grpc.ClientConn) {
+	// recursively traverse the filesystem starting workspacePath root and send the files to server for scanning
+	err := filepath.Walk(config.WorkspacePath, func(path string, info os.FileInfo, err error) error {
+		// fmt.Println("Sending file")
+		sendFileToServer(path, conn)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func loadConfig() *Config {
