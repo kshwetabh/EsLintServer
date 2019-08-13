@@ -29,14 +29,38 @@ var config *Config
 var watcher *fsnotify.Watcher
 var reportFlag *bool
 
-func init() {
-	config = loadConfig()
-}
-
 func main() {
 
-	reportFlag = flag.Bool("report", false, "Scans all javascript files in the workspace and generates report.csv file.")
+	reportFlag = flag.Bool("report", false, "Scans all javascript files in the workspace and generates report.csv file.\nWarning: if configured with remote EsLint server this might take long time depending on the number of files in the workspace.\n")
+	serverArg := flag.String("server", "", "URL of the EsLint Server, defaults to 'eslintServerURL' value configured in config.json\n")
+	pathArg := flag.String("src", "", "Path to the source code directory, defaults to 'workspacePath' value configured in config.json\n")
 	flag.Parse()
+
+	var err error
+	if *pathArg == "" || *serverArg == "" {
+		config, err = loadConfig()
+
+		if err != nil {
+			if *pathArg == "" {
+				panic("\nInvalid configuration. Could not get the source directory. Either configure 'workspacePath' in config.json file or pass it on command line argument with -src option. Run EsLintClient --help for more details.")
+			}
+			if *serverArg == "" {
+				panic("\nInvalid configuration. Could not get the Server URL. Either configure 'eslintServerURL' in config.json file or pass it on command line argument with -server option. Run EsLintClient --help for more details.")
+			}
+		}
+	}
+
+	// Initialize cfg if loadConfig() returned any error
+	if config == nil {
+		config = &Config{}
+	}
+
+	if *pathArg != "" {
+		config.WorkspacePath = *pathArg
+	}
+	if *serverArg != "" {
+		config.EslintServerURL = *serverArg
+	}
 
 	// Set up a connection to the server.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -212,7 +236,12 @@ func watchDir(path string, fi os.FileInfo, err error) error {
 	// The issue with this approach is then watcher fires duplicate modification events (one for directory and one for file modification) causing two requests
 	// to be fired from the client on each file save. Watching only for the files (and not directories) reduces duplicate calls but does not completely makes it go away.
 	if !fi.Mode().IsDir() {
-		return watcher.Add(path)
+		err := watcher.Add(path)
+		if err != nil {
+			color.Magenta("Error occurred watching filesystem: %v", err)
+			panic("")
+		}
+		return err
 	}
 	return nil
 }
@@ -229,17 +258,17 @@ func scanAllFilesInWorkspace(conn *grpc.ClientConn) {
 	}
 }
 
-func loadConfig() *Config {
+func loadConfig() (*Config, error) {
 	configFile, err := os.Open("config.json")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer configFile.Close()
 
 	cfg := &Config{}
 	err = json.NewDecoder(configFile).Decode(cfg)
 	if err != nil {
-		panic("parsing config: " + err.Error())
+		return nil, err
 	}
-	return cfg
+	return cfg, nil
 }
