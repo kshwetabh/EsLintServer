@@ -68,7 +68,7 @@ func main() {
 
 	conn, err := setupRPCConnection(config.EslintServerURL)
 	if err != nil {
-		color.HiRed("************ Could not connect to the EsLint Server. Please make sure you are on Infor network and \"eslintServerURL\" is configured correctly in config.json file. ************")
+		color.HiRed("************ Could not connect to the EsLint Server. Please make sure EsLint Server is reachable on the network and \"eslintServerURL\" is configured correctly in config.json file. ************")
 		panic(err)
 	}
 	defer conn.Close()
