@@ -1,13 +1,13 @@
-## Eslint Server written in NodeJS and EsLint Desktop Client written in Go
+## ESLint Server written in NodeJS and ESLint Desktop Client written in Go
 This application uses a NodeJS GRPC (Google Remote Procedure Call using protocol buffers for data exchange) server to host EsLint CLIEngine Utility. Go client running in Command Prompt / Terminal functions as agents to watch filesystem for any modifications to the JS files and sends the modified file to the NodeJS GRPC server using protobuffs. NodeJS GRPC server scans the content, generates the report and sends back to the Go Client (using protobuff). Go client running in terminal then displays the error/warnings accordingly.
 
 ### Usage
 ```bash
-EsLintClient.exe --help
+ESLintClient.exe --help
 
-Usage of EsLintClient.exe:
+Usage of ESLintClient.exe:
   -file string
-        File name with full path to be sent to the EsLint Server for scanning. Note that this is a one-off execution of the client for a single file. EsLintClient terminates after it displays scan result for the file
+        File name with full path to be sent to the EsLint Server for scanning. Note that this is a one-off execution of the client for a single file. ESLintClient terminates after it displays scan result for the file
 
   -report
         Scans all javascript files in the workspace and generates report.csv file.
