@@ -31,45 +31,42 @@ var reportFlag *bool
 
 func main() {
 
-	reportFlag = flag.Bool("report", false, "Scans all javascript files in the workspace and generates report.csv file.\nWarning: if configured with remote EsLint server this might take long time depending on the number of files in the workspace.\n")
+	reportFlag = flag.Bool("report", false, "Scans all javascript files in the workspace and generates report.csv file.\nWarning: if configured with remote EsLint server this might take long time depending on the number of files in the workspace\n")
 	serverArg := flag.String("server", "", "URL of the EsLint Server, defaults to 'eslintServerURL' value configured in config.json\n")
 	pathArg := flag.String("src", "", "Path to the source code directory, defaults to 'workspacePath' value configured in config.json\n")
+	singleFilePath := flag.String("file", "", "File name with full path to be sent to the EsLint Server for scanning. Note that this is a one-off execution of the client for a single file. EsLintClient terminates after it displays scan result for the file\n")
 	flag.Parse()
 
 	var err error
-	if *pathArg == "" || *serverArg == "" {
-		config, err = loadConfig()
-
-		if err != nil {
-			if *pathArg == "" {
-				panic("\nInvalid configuration. Could not get the source directory. Either configure 'workspacePath' in config.json file or pass it on command line argument with -src option. Run EsLintClient --help for more details.")
-			}
-			if *serverArg == "" {
-				panic("\nInvalid configuration. Could not get the Server URL. Either configure 'eslintServerURL' in config.json file or pass it on command line argument with -server option. Run EsLintClient --help for more details.")
-			}
-		}
-	}
-
-	// Initialize cfg if loadConfig() returned any error
-	if config == nil {
+	config, err = loadConfig()
+	if err != nil {
+		// Initialize cfg if loadConfig() returned any error
 		config = &Config{}
 	}
 
-	if *pathArg != "" {
-		config.WorkspacePath = *pathArg
-	}
-	if *serverArg != "" {
+	// Server url is a required parameters
+	if *serverArg == "" {
+		if err != nil || config.EslintServerURL == "" {
+			color.HiRed("\nInvalid configuration. Could not get the Server URL. Either configure 'eslintServerURL' in config.json file or pass it on command line argument with -server option. Run EsLintClient --help for more details.")
+			//panic("\nInvalid configuration. Could not get the Server URL. Either configure 'eslintServerURL' in config.json file or pass it on command line argument with -server option. Run EsLintClient --help for more details.")
+			return
+		}
+	} else {
 		config.EslintServerURL = *serverArg
 	}
 
-	// Set up a connection to the server.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	if *singleFilePath == "" {
+		if *pathArg == "" {
+			if err != nil || config.WorkspacePath == "" {
+				color.HiRed("\nInvalid configuration. Could not get the source directory. Either configure 'workspacePath' in config.json file or pass it on command line argument with -src option. Run EsLintClient --help for more details.")
+				return
+			}
+		} else {
+			config.WorkspacePath = *pathArg
+		}
+	}
 
-	fmt.Println("")
-	color.HiGreen("Connecting to EsLint Server [ %s ] ...", config.EslintServerURL)
-
-	conn, err := grpc.DialContext(ctx, config.EslintServerURL, grpc.WithBlock(), grpc.WithInsecure())
+	conn, err := setupRPCConnection(config.EslintServerURL)
 	if err != nil {
 		color.HiRed("************ Could not connect to the EsLint Server. Please make sure you are on Infor network and \"eslintServerURL\" is configured correctly in config.json file. ************")
 		panic(err)
@@ -77,6 +74,12 @@ func main() {
 	defer conn.Close()
 
 	color.HiGreen("Successfully connected to the EsLint Server")
+
+	// Single fine scan mode
+	if *singleFilePath != "" {
+		sendFileToServer(*singleFilePath, conn)
+		return
+	}
 
 	// if reportFlag argument passed on command line, then send all js files in workspace for scanning.
 	//TODO: Note that this is pretty network intensive and might crash client/server.
@@ -89,6 +92,17 @@ func main() {
 		monitorFileSystemForChanges(conn)
 		waitgroup.Wait()
 	}
+}
+
+func setupRPCConnection(serverURL string) (conn *grpc.ClientConn, err error) {
+	// Set up a connection to the server.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fmt.Println("")
+	color.HiGreen("Connecting to EsLint Server [ %s ] ...", serverURL)
+
+	return grpc.DialContext(ctx, serverURL, grpc.WithBlock(), grpc.WithInsecure())
 }
 
 func sendFileToServer(fileName string, conn *grpc.ClientConn) {
